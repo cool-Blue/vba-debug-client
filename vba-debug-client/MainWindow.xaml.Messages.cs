@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace vba_debug_client
 {
-
+	[DebuggerDisplay("[the string is {lpData}]")]
 	public struct COPYDATASTRUCT
 	{
 		public int dwData;

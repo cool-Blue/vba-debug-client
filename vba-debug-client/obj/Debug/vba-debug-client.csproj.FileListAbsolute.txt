@@ -1,14 +1,1 @@
 C:\Users\Admin\Documents\Visual Studio 2013\Projects\d3\libs\slider\vba-debug-client\vba-debug-client\bin\Debug\vba-debug-client.exe.config
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\bin\Debug\vba-debug-client.exe.config
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\bin\Debug\vba-debug-client.exe
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\bin\Debug\vba-debug-client.pdb
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client.csprojResolveAssemblyReference.cache
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\MainWindow.baml
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\MainWindow.g.cs
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\App.g.cs
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client_MarkupCompile.cache
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client.g.resources
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba_debug_client.Properties.Resources.resources
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client.csproj.GenerateResource.Cache
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client.exe
-C:\Users\Admin\Documents\Visual Studio 2013\Projects\vba-debug-client\vba-debug-client\obj\Debug\vba-debug-client.pdb

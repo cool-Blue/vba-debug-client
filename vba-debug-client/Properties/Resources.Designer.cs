@@ -35,7 +35,7 @@ namespace vba_debug_client.Properties
         }
 
         /// <summary>
-        ///   Returns the cached ResourceManager instance used by this class.
+        ///   Returns the cached ResourceManager Instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
         internal static global::System.Resources.ResourceManager ResourceManager
@@ -44,7 +44,7 @@ namespace vba_debug_client.Properties
             {
                 if ((resourceMan == null))
                 {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("vba_debug_client.Properties.Resources", typeof(Resources).Assembly);
+                    var temp = new global::System.Resources.ResourceManager("vba_debug_client.Properties.Resources", typeof(Resources).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
