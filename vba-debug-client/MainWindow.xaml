@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Height="807" Width="764" Margin="10">
     <Grid Margin="0,0,502,0">
-        <Button x:Name="pause" Content="Log" HorizontalAlignment="Left" Margin="305,740,-186,0" VerticalAlignment="Top" Width="75" Click="pause_Click"/>
-        <TextBox x:Name="logBox" Height="640" TextWrapping="Wrap" VerticalAlignment="Top" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,-501,0" Width="755">
+        <Button x:Name="pause" Content="Log" HorizontalAlignment="Center" Margin="305,740,-186,0" VerticalAlignment="Top" Width="75" Click="pause_Click"/>
+        <TextBox x:Name="logBox" Height="465" TextWrapping="Wrap" VerticalAlignment="Top" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,-501,0">
             <TextBox.SelectionBrush>
                 <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
                     <GradientStop Color="#FFF5F1F1" Offset="0"/>
@@ -18,8 +18,20 @@
                 </LinearGradientBrush>
             </TextBox.Background>
         </TextBox>
-        <TextBlock x:Name="description" HorizontalAlignment="Left" Margin="10,685,-491,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="675" Height="21"><InlineUIContainer>
-        	</InlineUIContainer></TextBlock>
-        <Button x:Name="clear" Content="Clear" HorizontalAlignment="Left" Margin="305,715,-186,0" VerticalAlignment="Top" Width="75" Click="clear_Click"/>
+        <Button x:Name="clear" Content="Clear" HorizontalAlignment="Center" Margin="305,715,-186,0" VerticalAlignment="Top" Width="75" Click="clear_Click"/>
+        <TextBox x:Name="summary" HorizontalAlignment="Center" Margin="0,490,-501,0" TextWrapping="Wrap" Text="" VerticalAlignment="Top" Height="220" Width="755">
+            <TextBox.SelectionBrush>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFF5F1F1" Offset="0"/>
+                    <GradientStop Color="#FF151414" Offset="1"/>
+                </LinearGradientBrush>
+            </TextBox.SelectionBrush>
+            <TextBox.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFA45C5C" Offset="0.002"/>
+                    <GradientStop Color="#FFBAEC9D" Offset="0.99"/>
+                </LinearGradientBrush>
+            </TextBox.Background>
+        </TextBox>
     </Grid>
 </Window>

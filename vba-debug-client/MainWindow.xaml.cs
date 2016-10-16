@@ -27,24 +27,29 @@ namespace vba_debug_client
 
 		public static MainWindow Instance;
 
-		private readonly Log _pLog;
+		public readonly Log PLog;
+
+		private ELogger _invoker;
 
 		public MainWindow()
 		{
 			InitializeComponent();
 			Title = "VBA Debug Log";
-			Instance = this;
-			_pLog = new Log(Instance.LogTest);
+			LogInvokers.Instance = Instance = this;
+			PLog = new Log(Instance.LogDebug);
+			_invoker = ELogger.CastAction;
 		}
 
 
-		delegate void del();
-
-		private delegate void Log(IntPtr hwnd, string message, string code, string p);
-
-		private void LogTest(IntPtr hwnd, string message, string code, string p2)
+		public void LogTest(IntPtr hwnd, string message, string code, string p2)
 		{
 			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + message + "\t" + code + "\t" + p2 + "\n";
+			logBox.Text = msg;
+			logBox.ScrollToEnd();
+		}
+		public void LogDebug (IntPtr hwnd, string message, string code, string p2)
+		{
+			var msg = logBox.Text  + p2 + "\n";
 			logBox.Text = msg;
 			logBox.ScrollToEnd();
 		}
@@ -69,7 +74,6 @@ namespace vba_debug_client
 			_hwndSource = PresentationSource.FromVisual(this) as HwndSource;
 			if (_hwndSource == null) return;
 			_hwndSource.AddHook(WndProc);
-			description.Text = "Handle: " + _hwndSource.Handle.ToString("X") + "\t";
 		}
 		/// <summary>
 		/// WndProc matches the HwndSourceHook delegate signature so it can be passed to AddHook() as a callback. This is the same as overriding a Windows.Form's WncProc method.
@@ -87,111 +91,51 @@ namespace vba_debug_client
 			switch ((WindowMessage)msg)
 			{
 				case WindowMessage.WM_COPYDATA:
+					// todo implement a custom data structure inside the COPYDATASTRUCT to transmit metta data
+					var cds = new COPYDATASTRUCT();
+					//var t = typeof(cds);
+					var t = cds.GetType();
+					cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, t);
+					var messageContent = Marshal.PtrToStringAnsi(cds.lpData, cds.cbData);
+					var message = "";
+					try
+					{
+						message = Messages.names[(WindowMessage)msg];
+					}
+					catch
+					{
+						message = "UNKNOWN MESSAGE\t:\t" + msg;
+					}
+
+					var subCode = "";
+					try
+					{
+						subCode = Messages.parameters[(WindowMessageParameter)wParam.ToInt32()];
+					}
+					catch
+					{
+						subCode = "UNKNOWN CODE\t:\t" + wParam;
+					}
+
+					try
+					{
+						if (null != messageContent) LogInvokers.LogInvoker[Instance._invoker](hwnd, message, subCode, messageContent);
+					}
+					catch
+					{
+						// todo handle exception
+						break;
+					}
+
 					break;
+
 				case WindowMessage.VBA_PRINT:
+					Instance._invoker = (ELogger)wParam.ToInt32();
 					break;
+
 				default:
 					return IntPtr.Zero;
 			}
-			if (!Instance._logging || (WindowMessage) msg != WindowMessage.WM_COPYDATA) return IntPtr.Zero;
-			var message = "";
-			var subCode = "";
-			COPYDATASTRUCT cds = new COPYDATASTRUCT();
-			//var t = typeof(cds);
-			var t = cds.GetType();
-			cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, t);
-			var messageContent = Marshal.PtrToStringAnsi(cds.lpData, cds.cbData); ;
-			try
-			{
-				message = Messages.names[(WindowMessage)msg];
-
-			}
-			catch
-			{
-				message = "UNKNOWN MESSAGE\t:\t" + msg;
-			}
-
-			try
-			{
-				subCode = Messages.parameters[(WindowMessageParameter)wParam.ToInt32()];
-			}
-			catch
-			{
-				subCode = "UNKNOWN CODE\t:\t" + wParam;
-			}
-
-			//Yep
-			Instance.Dispatcher.BeginInvoke(
-				new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
-				DispatcherPriority.Background
-			);
-
-			//Yep
-			Instance.Dispatcher.BeginInvoke(
-				method: (Action)(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
-				priority: DispatcherPriority.Background
-			);
-
-			//Yep
-			//requires
-			//	private delegate void Log(IntPtr hwnd, string message, string code, string p);
-			//in owner class
-			Instance.Dispatcher.BeginInvoke(
-				new Log(Instance.LogTest),
-				args: new object[] {hwnd, message, subCode, messageContent},
-				priority: DispatcherPriority.Background
-			);
-
-			//Yep
-			//requires
-			//	private readonly Log _pLog;	// in owner class
-			//and in owner class constructor	
-			//	Instance = this;
-			//	_pLog = new Log(Instance.LogTest);
-			Instance.Dispatcher.BeginInvoke(
-				Instance._pLog,
-				args: new object[] { hwnd, message, subCode, messageContent },
-				priority: DispatcherPriority.Background
-			);
-
-			//Yep
-			//requires
-			//	private delegate void Log(IntPtr hwnd, string message, string code, string p);
-			//in owner class
-			Instance.Dispatcher.BeginInvoke(
-				(Log)(Instance.LogTest),
-				args: new object[] { hwnd, message, subCode, messageContent },
-				priority: DispatcherPriority.Background
-			);
-
-			//Yep
-			//Action del = () => Instance.LogTest(hwnd, message, subCode, messageContent);
-			//var del = new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent));
-			//Instance.Dispatcher.BeginInvoke(
-			//    del,
-			//    DispatcherPriority.Background
-			//);
-
-			//Yep
-			//delegate void del(); in parent Class
-			//Instance.Dispatcher.BeginInvoke(
-			//    (del)(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
-			//    DispatcherPriority.Background
-			//);
-
-			var delLog = new Action<IntPtr, string, string, string>(Instance.LogTest);
-			//var del = new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent));
-			//Nope
-			//Instance.Dispatcher.BeginInvoke(
-			//    delLog, hwnd, message, subCode, messageContent,
-			//    DispatcherPriority.Background
-			//);
-
-			//Nope
-			//Instance.Dispatcher.BeginInvoke(
-			//    Log(hwnd, message, subCode, messageContent),
-			//    DispatcherPriority.Background
-			//);
 			
 			return IntPtr.Zero;
 
@@ -199,7 +143,7 @@ namespace vba_debug_client
 
 		private void clear_Click(object sender, RoutedEventArgs e)
 		{
-			logBox.Text = "";
+			summary.Text = logBox.Text = "";
 		}
 
 	}
@@ -226,11 +170,6 @@ namespace vba_debug_client
 			_windowState = new HwndSourceParameters(Title) {ParentWindow = HWND_MESSAGE};
 			_hwndSource = new HwndSource(_windowState);
 			Instance = this;
-		}
-
-		private void DispatchLog(string data)
-		{
-			
 		}
 
 		/// <summary>
@@ -267,7 +206,6 @@ namespace vba_debug_client
 			try
 			{
 				message = Messages.names[(WindowMessage)msg];
-
 			}
 			catch
 			{
@@ -282,8 +220,6 @@ namespace vba_debug_client
 			{
 				subCode = "UNKNOWN CODE\t:\t" + wParam;
 			}
-
-			//DispatchLog(hwnd, message, subCode, messageContent);
 
 			return IntPtr.Zero;
 
