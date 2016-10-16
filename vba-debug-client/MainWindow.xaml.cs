@@ -26,14 +26,36 @@ namespace vba_debug_client
 		private HwndSource _hwndSource;
 
 		public static MainWindow Instance;
+
+		private readonly Log _pLog;
+
 		public MainWindow()
 		{
 			InitializeComponent();
 			Title = "VBA Debug Log";
 			Instance = this;
-
+			_pLog = new Log(Instance.LogTest);
 		}
 
+
+		delegate void del();
+
+		private delegate void Log(IntPtr hwnd, string message, string code, string p);
+
+		private void LogTest(IntPtr hwnd, string message, string code, string p2)
+		{
+			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + message + "\t" + code + "\t" + p2 + "\n";
+			logBox.Text = msg;
+			logBox.ScrollToEnd();
+		}
+
+		private Boolean _logging;
+
+		private void pause_Click(object sender, RoutedEventArgs e)
+		{
+			_logging = !_logging;
+			pause.Content = _logging ? "Pause" : "Log";
+		}
 
 		/// <summary>
 		/// AddHook Handle WndProc messages in WPF
@@ -60,10 +82,22 @@ namespace vba_debug_client
 		/// <returns></returns>
 		private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
 		{
-			if (!Instance.Logging || (WindowMessage) msg != WindowMessage.WM_COPYDATA) return IntPtr.Zero;
+			if (!Instance._logging) return IntPtr.Zero;
+
+			switch ((WindowMessage)msg)
+			{
+				case WindowMessage.WM_COPYDATA:
+					break;
+				case WindowMessage.VBA_PRINT:
+					break;
+				default:
+					return IntPtr.Zero;
+			}
+			if (!Instance._logging || (WindowMessage) msg != WindowMessage.WM_COPYDATA) return IntPtr.Zero;
 			var message = "";
 			var subCode = "";
-			var cds = new COPYDATASTRUCT();
+			COPYDATASTRUCT cds = new COPYDATASTRUCT();
+			//var t = typeof(cds);
 			var t = cds.GetType();
 			cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, t);
 			var messageContent = Marshal.PtrToStringAnsi(cds.lpData, cds.cbData); ;
@@ -87,28 +121,66 @@ namespace vba_debug_client
 			}
 
 			//Yep
-			//Instance.Dispatcher.BeginInvoke(
-			//    new Action(() => Instance.LogMessage(hwnd, message, subCode, messageContent)),
-			//    DispatcherPriority.Background
-			//);
-
-			//Yep
-			//delegate void del(); in parent Class
 			Instance.Dispatcher.BeginInvoke(
-				(del)(() => Instance.LogMessage(hwnd, message, subCode, messageContent)),
+				new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
 				DispatcherPriority.Background
 			);
 
 			//Yep
-			//Action del = () => Instance.LogMessage(hwnd, message, subCode, messageContent);
-			//var del = new Action(() => Instance.LogMessage(hwnd, message, subCode, messageContent));
+			Instance.Dispatcher.BeginInvoke(
+				method: (Action)(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
+				priority: DispatcherPriority.Background
+			);
+
+			//Yep
+			//requires
+			//	private delegate void Log(IntPtr hwnd, string message, string code, string p);
+			//in owner class
+			Instance.Dispatcher.BeginInvoke(
+				new Log(Instance.LogTest),
+				args: new object[] {hwnd, message, subCode, messageContent},
+				priority: DispatcherPriority.Background
+			);
+
+			//Yep
+			//requires
+			//	private readonly Log _pLog;	// in owner class
+			//and in owner class constructor	
+			//	Instance = this;
+			//	_pLog = new Log(Instance.LogTest);
+			Instance.Dispatcher.BeginInvoke(
+				Instance._pLog,
+				args: new object[] { hwnd, message, subCode, messageContent },
+				priority: DispatcherPriority.Background
+			);
+
+			//Yep
+			//requires
+			//	private delegate void Log(IntPtr hwnd, string message, string code, string p);
+			//in owner class
+			Instance.Dispatcher.BeginInvoke(
+				(Log)(Instance.LogTest),
+				args: new object[] { hwnd, message, subCode, messageContent },
+				priority: DispatcherPriority.Background
+			);
+
+			//Yep
+			//Action del = () => Instance.LogTest(hwnd, message, subCode, messageContent);
+			//var del = new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent));
 			//Instance.Dispatcher.BeginInvoke(
 			//    del,
 			//    DispatcherPriority.Background
 			//);
 
-			var delLog = new Action<IntPtr, string, string, string> (Instance.LogMessage);
-			//var del = new Action(() => Instance.LogMessage(hwnd, message, subCode, messageContent));
+			//Yep
+			//delegate void del(); in parent Class
+			//Instance.Dispatcher.BeginInvoke(
+			//    (del)(() => Instance.LogTest(hwnd, message, subCode, messageContent)),
+			//    DispatcherPriority.Background
+			//);
+
+			var delLog = new Action<IntPtr, string, string, string>(Instance.LogTest);
+			//var del = new Action(() => Instance.LogTest(hwnd, message, subCode, messageContent));
 			//Nope
 			//Instance.Dispatcher.BeginInvoke(
 			//    delLog, hwnd, message, subCode, messageContent,
@@ -117,29 +189,12 @@ namespace vba_debug_client
 
 			//Nope
 			//Instance.Dispatcher.BeginInvoke(
-			//    disp(hwnd, message, subCode, messageContent),
+			//    Log(hwnd, message, subCode, messageContent),
 			//    DispatcherPriority.Background
 			//);
 			
 			return IntPtr.Zero;
 
-		}
-
-		delegate void del();
-		private delegate void disp(IntPtr hwnd, string message, string code, string p);
-		private void LogMessage(IntPtr hwnd, string message, string code, string p2)
-		{
-			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + message + "\t" + code + "\t" + p2 + "\n";
-			logBox.Text = msg;
-			logBox.ScrollToEnd();
-		}
-
-		private Boolean Logging = false;
-
-		private void pause_Click(object sender, RoutedEventArgs e)
-		{
-			Logging = !Logging;
-			pause.Content = Logging ? "Pause" : "Log";
 		}
 
 		private void clear_Click(object sender, RoutedEventArgs e)
