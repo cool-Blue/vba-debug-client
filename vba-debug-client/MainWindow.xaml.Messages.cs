@@ -30,7 +30,7 @@ namespace vba_debug_client
 	public static class LogInvokers
 	{
 		public static MainWindow Instance;
-		private const DispatcherPriority Priority = DispatcherPriority.SystemIdle;
+		private const DispatcherPriority Priority = DispatcherPriority.ApplicationIdle;
 
 		public static Dictionary<ELogger, Log> LogInvoker = new Dictionary<ELogger, Log>
 		{
@@ -74,8 +74,7 @@ namespace vba_debug_client
 					//	Instance = this;
 					//	_pLog = new Log(Instance.PLog);
 					Instance.Dispatcher.BeginInvoke(
-						Instance.PLog,
-						args: new object[] { hwnd, message, subCode, messageContent },
+						Instance.PLog, args: new object[] { hwnd, message, subCode, messageContent },
 						priority: Priority
 					);
 				})
@@ -87,8 +86,7 @@ namespace vba_debug_client
 					//	private delegate void Log(IntPtr hwnd, string message, string code, string p);
 					//in owner class
 					Instance.Dispatcher.BeginInvoke(
-						(Log)(Instance.PLog),
-						args: new object[] { hwnd, message, subCode, messageContent },
+						(Log)(Instance.PLog), args: new object[] { hwnd, message, subCode, messageContent },
 						priority: Priority
 					);
 				})
@@ -357,6 +355,7 @@ namespace vba_debug_client
 		WM_PENWINLAST = 0x038f,
 		DDM_SETFMT = 0x0400,
 		VBA_PRINT = 0x401,
+		VBA_EOF = 0x402
 	}
 
 	/// <summary>
