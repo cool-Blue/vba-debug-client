@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Height="807" Width="764" Margin="10">
     <Grid Margin="0,0,502,0">
-        <Button x:Name="pause" Content="Log" HorizontalAlignment="Center" Margin="305,740,-186,0" VerticalAlignment="Top" Width="75" Click="pause_Click"/>
+        <Button x:Name="pause" Content="Logging" HorizontalAlignment="Center" Margin="305,740,-186,0" VerticalAlignment="Top" Width="75" Click="pause_Click"/>
         <TextBox x:Name="logBox" Height="465" TextWrapping="NoWrap" VerticalAlignment="Top" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,-501,0">
             <TextBox.SelectionBrush>
                 <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">

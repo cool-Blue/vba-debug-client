@@ -27,7 +27,7 @@ namespace vba_debug_client
 
 		public static MainWindow Instance;
 
-		public readonly Log PLog;
+		public readonly LogInvokers.Log PLog;
 
 		private ELogger _invoker;
 
@@ -36,8 +36,9 @@ namespace vba_debug_client
 			InitializeComponent();
 			Title = "VBA Debug Log";
 			LogInvokers.Instance = Instance = this;
-			PLog = new Log(Instance.LogDebug);
+			PLog = new LogInvokers.Log(Instance.LogDebug);
 			_invoker = ELogger.CastAction;
+			_logging = true;
 		}
 
 
@@ -50,7 +51,7 @@ namespace vba_debug_client
 
 		private readonly StringBuilder _content = new StringBuilder();
 		private int _newLines = 0;
-		private const int PAGE = 1000;
+		private const int PAGE = 100;
 		public void LogDebug (IntPtr hwnd, string message, string code, string p2)
 		{
 			if(p2 != null)
@@ -65,8 +66,14 @@ namespace vba_debug_client
 
 		private void pause_Click(object sender, RoutedEventArgs e)
 		{
-			_logging = !_logging;
-			pause.Content = _logging ? "Pause" : "Log";
+			string content;
+			Toggle(ref _logging, out content, new List<string> {"Logging", "Paused"});
+			pause.Content = content;
+		}
+		private static void Toggle (ref Boolean flag, out string value, IReadOnlyList<string> options)
+		{
+			flag = !flag;
+			value = flag ? options[0] : options[1];
 		}
 
 		/// <summary>
@@ -93,10 +100,10 @@ namespace vba_debug_client
 		/// <returns></returns>
 		private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
 		{
-			if (!Instance._logging) return IntPtr.Zero;
 			switch ((WindowMessage)msg)
 			{
 				case WindowMessage.WM_COPYDATA:
+					if (!Instance._logging) return IntPtr.Zero;
 					// todo implement a custom data structure inside the COPYDATASTRUCT to transmit metta data
 					var cds = new COPYDATASTRUCT();
 					//var t = typeof(cds);
@@ -135,11 +142,19 @@ namespace vba_debug_client
 
 					break;
 
+				case WindowMessage.VBA_LOGGING:
+					Instance.pause_Click(Instance.pause, new RoutedEventArgs(Button.ClickEvent));
+					break;
+
 				case WindowMessage.VBA_PRINT:
 					Instance._invoker = (ELogger)wParam.ToInt32();
 					break;
 
-				case WindowMessage.VBA_EOF:
+				case WindowMessage.VBA_CLEAR:
+					Instance.clear_Click(Instance.clear, new RoutedEventArgs(Button.ClickEvent));
+					break;
+
+				case WindowMessage.VBA_EOF:	// todo refactor as null message in WM_COPYDATA
 					try
 					{
 						LogInvokers.LogInvoker[Instance._invoker](hwnd, "", "", null);
@@ -181,7 +196,9 @@ namespace vba_debug_client
 
 		public static MessageOnlyWindow Instance;
 
-		public MessageOnlyWindow(Dispatcher output, Delegate log)
+		private ELogger _invoker;
+
+		public MessageOnlyWindow (Dispatcher output, Delegate log)
 		{
 			Enabled = false;
 			Title = "VBA Debug Log";

@@ -25,13 +25,20 @@ namespace vba_debug_client
 		NoOpp
 	}
 
-	public delegate void Log (IntPtr hwnd, string message, string code, string p);
-
+	/// <summary>
+	/// Provides a mapping between VBA_PRINT message wParam and logger invokation methods
+	/// </summary>
 	public static class LogInvokers
 	{
 		public static MainWindow Instance;
+
+		public delegate void Log (IntPtr hwnd, string message, string code, string p);
+
 		private const DispatcherPriority Priority = DispatcherPriority.ApplicationIdle;
 
+		/// <summary>
+		/// An invoker manifold for Log delegates
+		/// </summary>
 		public static Dictionary<ELogger, Log> LogInvoker = new Dictionary<ELogger, Log>
 		{
 			{
@@ -355,7 +362,9 @@ namespace vba_debug_client
 		WM_PENWINLAST = 0x038f,
 		DDM_SETFMT = 0x0400,
 		VBA_PRINT = 0x401,
-		VBA_EOF = 0x402
+		VBA_EOF = 0x402,
+		VBA_LOGGING = 0x403,
+		VBA_CLEAR = 0x404
 	}
 
 	/// <summary>
