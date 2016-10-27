@@ -35,16 +35,16 @@ namespace vba_debug_client
 		{
 			InitializeComponent();
 			Title = "VBA Debug Log";
-			LogInvokers.Instance = Instance = this;
-			PLog = new LogInvokers.Log(Instance.LogDebug);
+			LogInvokers.Logger = Instance.LogDebug;
+			LogInvokers.OwnDispatcher = Instance.Dispatcher;
 			_invoker = ELogger.CastAction;
 			_logging = true;
 		}
 
 
-		public void LogTest(IntPtr hwnd, string message, string code, string p2)
+		public void LogTest(IntPtr hwnd, string code, string p2)
 		{
-			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + message + "\t" + code + "\t" + p2 + "\n";
+			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + code + "\t" + p2 + "\n";
 			logBox.Text = msg;
 			logBox.ScrollToEnd();
 		}
@@ -52,7 +52,7 @@ namespace vba_debug_client
 		private readonly StringBuilder _content = new StringBuilder();
 		private int _newLines = 0;
 		private const int PAGE = 100;
-		public void LogDebug (IntPtr hwnd, string message, string code, string p2)
+		public void LogDebug (IntPtr hwnd, IntPtr sender, string p2)
 		{
 			if(p2 != null)
 				_content.AppendLine(p2);
@@ -89,6 +89,9 @@ namespace vba_debug_client
 			if (_hwndSource == null) return;
 			_hwndSource.AddHook(WndProc);
 		}
+
+		private static readonly WmCopyData wmCopyData = new WmCopyData();
+
 		/// <summary>
 		/// WndProc matches the HwndSourceHook delegate signature so it can be passed to AddHook() as a callback. This is the same as overriding a Windows.Form's WncProc method.
 		/// </summary>
@@ -100,39 +103,23 @@ namespace vba_debug_client
 		/// <returns></returns>
 		private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
 		{
-			switch ((WindowMessage)msg)
+			switch ((Messages.WindowMessage)msg)
 			{
-				case WindowMessage.WM_COPYDATA:
+				case Messages.WindowMessage.WM_COPYDATA:
 					if (!Instance._logging) return IntPtr.Zero;
+
+					// wParam is the hwnd of the sender
+					// lParam is a pointer to a COPYDATASTRUCT struct that packages the message data
+					// the this case uses the second an third elements to marshal a string from the package
 					// todo implement a custom data structure inside the COPYDATASTRUCT to transmit metta data
-					var cds = new COPYDATASTRUCT();
-					//var t = typeof(cds);
-					var t = cds.GetType();
-					cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, t);
-					var messageContent = Marshal.PtrToStringAnsi(cds.lpData, cds.cbData);
-					var message = "";
-					try
-					{
-						message = Messages.names[(WindowMessage)msg];
-					}
-					catch
-					{
-						message = "UNKNOWN MESSAGE\t:\t" + msg;
-					}
-
-					var subCode = "";
-					try
-					{
-						subCode = Messages.parameters[(WindowMessageParameter)wParam.ToInt32()];
-					}
-					catch
-					{
-						subCode = "UNKNOWN CODE\t:\t" + wParam;
-					}
+					// todo encapsulate this in a message class
 
 					try
 					{
-						if (null != messageContent) LogInvokers.LogInvoker[Instance._invoker](hwnd, message, subCode, messageContent);
+						var messageContent = wmCopyData.ToString(lParam);
+						var sender = wParam;
+
+						LogInvokers.LogInvoker[Instance._invoker](hwnd, sender, messageContent);
 					}
 					catch
 					{
@@ -142,29 +129,18 @@ namespace vba_debug_client
 
 					break;
 
-				case WindowMessage.VBA_LOGGING:
+				case Messages.WindowMessage.VBA_LOGGING:
+					// pause or un-pause logging
 					Instance.pause_Click(Instance.pause, new RoutedEventArgs(Button.ClickEvent));
 					break;
 
-				case WindowMessage.VBA_PRINT:
+				case Messages.WindowMessage.VBA_PRINT:
+					// select the delegate to be used for logging
 					Instance._invoker = (ELogger)wParam.ToInt32();
 					break;
 
-				case WindowMessage.VBA_CLEAR:
+				case Messages.WindowMessage.VBA_CLEAR:
 					Instance.clear_Click(Instance.clear, new RoutedEventArgs(Button.ClickEvent));
-					break;
-
-				case WindowMessage.VBA_EOF:	// todo refactor as null message in WM_COPYDATA
-					try
-					{
-						LogInvokers.LogInvoker[Instance._invoker](hwnd, "", "", null);
-					}
-					catch
-					{
-						// todo handle exception
-						break;
-					}
-
 					break;
 
 				default:
@@ -219,68 +195,6 @@ namespace vba_debug_client
 		/// <returns></returns>
 		private static IntPtr WndProc (IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
 		{
-			if (!Instance.Enabled) return IntPtr.Zero;
-			switch ((WindowMessage)msg)
-			{
-				case WindowMessage.WM_COPYDATA:
-					// todo implement a custom data structure inside the COPYDATASTRUCT to transmit metta data
-					var cds = new COPYDATASTRUCT();
-					//var t = typeof(cds);
-					var t = cds.GetType();
-					cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, t);
-					var messageContent = Marshal.PtrToStringAnsi(cds.lpData, cds.cbData);
-					var message = "";
-					try
-					{
-						message = Messages.names[(WindowMessage)msg];
-					}
-					catch
-					{
-						message = "UNKNOWN MESSAGE\t:\t" + msg;
-					}
-
-					var subCode = "";
-					try
-					{
-						subCode = Messages.parameters[(WindowMessageParameter)wParam.ToInt32()];
-					}
-					catch
-					{
-						subCode = "UNKNOWN CODE\t:\t" + wParam;
-					}
-
-					try
-					{
-						if (null != messageContent) LogInvokers.LogInvoker[Instance._invoker](hwnd, message, subCode, messageContent);
-					}
-					catch
-					{
-						// todo handle exception
-						break;
-					}
-
-					break;
-
-				case WindowMessage.VBA_PRINT:
-					Instance._invoker = (ELogger)wParam.ToInt32();
-					break;
-
-				case WindowMessage.VBA_EOF:
-					try
-					{
-						LogInvokers.LogInvoker[Instance._invoker](hwnd, "", "", null);
-					}
-					catch
-					{
-						// todo handle exception
-						break;
-					}
-
-					break;
-
-				default:
-					return IntPtr.Zero;
-			}
 
 			return IntPtr.Zero;
 
