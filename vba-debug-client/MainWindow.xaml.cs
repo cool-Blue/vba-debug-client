@@ -16,6 +16,7 @@ using System.Windows.Interop;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 
+
 namespace vba_debug_client
 {
 	/// <summary>
@@ -27,20 +28,24 @@ namespace vba_debug_client
 
 		public static MainWindow Instance;
 
-		public readonly LogInvokers.Log PLog;
+		private readonly LogInvokers _logInvokers;
 
-		private ELogger _invoker;
+		private EInvoker _invokerType;
+
+		private string _loggerTransport;
+
+		private readonly Logger _logger;
 
 		public MainWindow()
 		{
 			InitializeComponent();
 			Title = "VBA Debug Log";
-			LogInvokers.Logger = Instance.LogDebug;
-			LogInvokers.OwnDispatcher = Instance.Dispatcher;
-			_invoker = ELogger.CastAction;
+			Instance = this;
+			_logger = new Logger(logBox);
+			_logInvokers = new LogInvokers(Dispatcher, _logger.Loggers["text"]);	// bind the dictionary to the inst context
+			_invokerType = EInvoker.CastAction;
 			_logging = true;
 		}
-
 
 		public void LogTest(IntPtr hwnd, string code, string p2)
 		{
@@ -48,21 +53,73 @@ namespace vba_debug_client
 			logBox.Text = msg;
 			logBox.ScrollToEnd();
 		}
-
-		private readonly StringBuilder _content = new StringBuilder();
-		private int _newLines = 0;
-		private const int PAGE = 100;
-		public void LogDebug (IntPtr hwnd, IntPtr sender, string p2)
-		{
-			if(p2 != null)
-				_content.AppendLine(p2);
-			if (p2 != null && PAGE > ++_newLines) return;
-				logBox.Text = _content.ToString();
-				logBox.ScrollToEnd();
-				_newLines = 0;
-		}
-
 		private Boolean _logging;
+		private class Logger
+		{
+			// todo move Log delegate declaration here
+
+			private readonly TextBox _logBox;
+
+			public void Clear ()
+			{
+				_content.Clear();
+				_logBox.Text = "";
+			}
+
+			public Dictionary<string, LogInvokers.Log> Loggers;
+
+			private readonly StringBuilder _content = new StringBuilder();
+			private int _newLines;
+			private const int PAGE = 100;
+
+			public Logger (TextBox logBox)
+			{
+				_logBox = logBox;
+				Loggers = new Dictionary<string, LogInvokers.Log>
+				{
+					{
+						"text", (IntPtr hwnd, IntPtr sender, string p2) =>
+						{
+							if (p2 != null)
+								_content.AppendLine(p2);
+							if (p2 != null && PAGE > ++_newLines) return;
+							_logBox.Text = _content.ToString();
+							_logBox.ScrollToEnd();
+							_newLines = 0;
+						}
+					},
+					{
+						"json", (IntPtr hwnd, IntPtr sender, string p2) =>
+						{
+							if (p2 != null)
+								_content.AppendLine(p2);
+							if (p2 != null && PAGE > ++_newLines) return;
+							_logBox.Text = _content.ToString();
+							_logBox.ScrollToEnd();
+							_newLines = 0;
+						}
+					}
+				};
+			}
+
+			public enum logEdge : uint
+			{
+				callProc,
+				logReport,
+				ExitProc
+			}
+
+			private class LoggerMessage
+			{
+				public logEdge edge { get; set; }
+				public string caller { get; set; }
+				public string timestamp { get; set; }
+				public string context { get; set; }
+				public string message { get; set; }
+				public string error { get; set; }
+				public string dt { get; set; }
+			}
+		}
 
 		private void pause_Click(object sender, RoutedEventArgs e)
 		{
@@ -74,6 +131,11 @@ namespace vba_debug_client
 		{
 			flag = !flag;
 			value = flag ? options[0] : options[1];
+		}
+		private void clear_Click (object sender, RoutedEventArgs e)
+		{
+			summary.Text = "";
+			_logger.Clear();
 		}
 
 		/// <summary>
@@ -102,6 +164,7 @@ namespace vba_debug_client
 		/// <param name="handled">A value that indicates whether the message was handled</param>
 		/// <returns></returns>
 		private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+			// todo try single argument overload
 		{
 			switch ((Messages.WindowMessage)msg)
 			{
@@ -112,14 +175,16 @@ namespace vba_debug_client
 					// lParam is a pointer to a COPYDATASTRUCT struct that packages the message data
 					// the this case uses the second an third elements to marshal a string from the package
 					// todo implement a custom data structure inside the COPYDATASTRUCT to transmit metta data
+					//	cancelled in favour of json serialisation
 					// todo encapsulate this in a message class
+					// todo impliment a receivedData event
 
 					try
 					{
 						var messageContent = wmCopyData.ToString(lParam);
 						var sender = wParam;
 
-						LogInvokers.LogInvoker[Instance._invoker](hwnd, sender, messageContent);
+						Instance._logInvokers.LoggerTypes[Instance._invokerType](hwnd, sender, messageContent);
 					}
 					catch
 					{
@@ -136,11 +201,18 @@ namespace vba_debug_client
 
 				case Messages.WindowMessage.VBA_PRINT:
 					// select the delegate to be used for logging
-					Instance._invoker = (ELogger)wParam.ToInt32();
+					Instance._invokerType = (EInvoker)wParam.ToInt32();
 					break;
 
 				case Messages.WindowMessage.VBA_CLEAR:
 					Instance.clear_Click(Instance.clear, new RoutedEventArgs(Button.ClickEvent));
+					break;
+
+				case Messages.WindowMessage.VBA_TRANSPORT:
+					// select text or json transport mode
+					// todo add selector in excel
+					// todo move to subclass of WM_COPYDATA
+					Instance._loggerTransport = Instance._logger.Loggers.Keys.ToList()[wParam.ToInt32()];
 					break;
 
 				default:
@@ -150,13 +222,6 @@ namespace vba_debug_client
 			return IntPtr.Zero;
 
 		}
-
-		private void clear_Click(object sender, RoutedEventArgs e)
-		{
-			summary.Text = logBox.Text = "";
-			_content.Clear();
-		}
-
 	}
 }
 
@@ -172,7 +237,7 @@ namespace vba_debug_client
 
 		public static MessageOnlyWindow Instance;
 
-		private ELogger _invoker;
+		private EInvoker _invoker;
 
 		public MessageOnlyWindow (Dispatcher output, Delegate log)
 		{

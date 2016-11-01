@@ -3,29 +3,37 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
+using MS.Internal.Interop;
 
 namespace vba_debug_client
 {
 	public class WmCopyData
 	{
 		[DebuggerDisplay("[the string is {lpData}]")]
+		[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
 		struct COPYDATASTRUCT
 		{
 			public int dwData;
 			public int cbData;
-			public IntPtr lpData;
+			[MarshalAs(UnmanagedType.LPStr)]
+			public String lpData;
 		}
-		COPYDATASTRUCT cds;
+		COPYDATASTRUCT _cds;
 
+		/// <summary>
+		/// unpack the content of a WM_DATA message
+		/// </summary>
+		/// <param name="lParam"></param>
+		/// <returns></returns>
 		public string ToString(IntPtr lParam)
 		{
-			cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, typeof(COPYDATASTRUCT));
-			return cds.lpData == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(cds.lpData, cds.cbData);
+			_cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, typeof(COPYDATASTRUCT));
+			return _cds.lpData;
 		}
 
 		public WmCopyData()
 		{
-			cds = new COPYDATASTRUCT();
+			_cds = new COPYDATASTRUCT();
 		}
 
 	}
@@ -54,7 +62,7 @@ namespace vba_debug_client
 
 	}
 
-	public enum ELogger : uint
+	public enum EInvoker : uint
 	{
 		NewAction,
 		CastAction,
@@ -69,100 +77,107 @@ namespace vba_debug_client
 	/// <summary>
 	/// Provides a mapping between VBA_PRINT message wParam and logger invokation methods
 	/// </summary>
-	public static class LogInvokers
+	public class LogInvokers
 	{
 		public delegate void Log (IntPtr hwnd, IntPtr sender, string p);
 
-		public static Log Logger;
-
-		public static Dispatcher OwnDispatcher;
-
 		private const DispatcherPriority Priority = DispatcherPriority.ApplicationIdle;
+		
+		public Dictionary<EInvoker, Log> LoggerTypes;
+
+		public LogInvokers (Dispatcher dispatcher, Log logger)
+		{
+			LoggerTypes = Invokers(dispatcher, logger);
+		}
 
 		/// <summary>
 		/// An invoker manifold for Log delegates
 		/// </summary>
-		public static Dictionary<ELogger, Log> LogInvoker = new Dictionary<ELogger, Log>
+		static Dictionary<EInvoker, Log> Invokers (Dispatcher dispatcher, Log logger)
 		{
+			return new Dictionary<EInvoker, Log>()
 			{
-				ELogger.NewAction, (Log) ((hwnd, sender, messageContent) =>
 				{
-					OwnDispatcher.BeginInvoke(
-						new Action(() =>Logger(hwnd, sender, messageContent)),
-						Priority
-					);
-				})
-			},
-			{
-				ELogger.CastAction, (Log) ((hwnd, sender, messageContent) =>
+					EInvoker.NewAction, (Log) ((hwnd, sender, messageContent) =>
+					{
+						dispatcher.BeginInvoke(
+							new Action(() => logger(hwnd, sender, messageContent)),
+							Priority
+							);
+					})
+				},
 				{
-					OwnDispatcher.BeginInvoke(
-						method: (Action)(() =>Logger(hwnd, sender, messageContent)),
-						priority: Priority
-					);
-				})
-			},
-			{
-				ELogger.NewLog, (Log) ((hwnd, sender, messageContent) =>
+					EInvoker.CastAction, (Log) ((hwnd, sender, messageContent) =>
+					{
+						dispatcher.BeginInvoke(
+							method: (Action) (() => logger(hwnd, sender, messageContent)),
+							priority: Priority
+							);
+					})
+				},
 				{
-					//requires
-					//	private delegate void Log(IntPtr hwnd, string string sender, string p);
-					//in owner class
-					OwnDispatcher.BeginInvoke(
-						new Log(Logger),
-						args: new object[] { hwnd, sender, messageContent },
-						priority: Priority
-					);
-				})
-			},
-			{
-				ELogger.InstanceLog, (Log) ((hwnd, sender, messageContent) =>
+					EInvoker.NewLog, (Log) ((hwnd, sender, messageContent) =>
+					{
+						//requires
+						//	private delegate void Log(IntPtr hwnd, string string sender, string p);
+						//in owner class
+						dispatcher.BeginInvoke(
+							new Log(logger),
+							args: new object[] {hwnd, sender, messageContent},
+							priority: Priority
+							);
+					})
+				},
 				{
-					//requires
-					//	private readonly Log _pLog;	// in owner class
-					//and in owner class constructor	
-					//	Instance = this;
-					//	_pLog = new Log(Logger);
-					OwnDispatcher.BeginInvoke(
-						Logger, args: new object[] { hwnd, sender, messageContent },
-						priority: Priority
-					);
-				})
-			},
-			{
-				ELogger.CastLog, (Log) ((hwnd, sender, messageContent) =>
+					EInvoker.InstanceLog, (Log) ((hwnd, sender, messageContent) =>
+					{
+						//requires
+						//	private readonly Log _pLog;	// in owner class
+						//and in owner class constructor	
+						//	instance = this;
+						//	_pLog = new Log(_logger);
+						dispatcher.BeginInvoke(
+							logger, args: new object[] {hwnd, sender, messageContent},
+							priority: Priority
+							);
+					})
+				},
 				{
-					//requires
-					//	private delegate void Log(IntPtr hwnd, string string sender, string p);
-					//in owner class
-					OwnDispatcher.BeginInvoke(
-						(Log)(Logger), args: new object[] { hwnd, sender, messageContent },
-						priority: Priority
-					);
-				})
-			},
-			{
-				ELogger.InvokeAsync, (Log) ((hwnd, sender, messageContent) =>
+					EInvoker.CastLog, (Log) ((hwnd, sender, messageContent) =>
+					{
+						//requires
+						//	private delegate void Log(IntPtr hwnd, string string sender, string p);
+						//in owner class
+						dispatcher.BeginInvoke(
+							(Log) (logger), args: new object[] {hwnd, sender, messageContent},
+							priority: Priority
+							);
+					})
+				},
 				{
-					OwnDispatcher.InvokeAsync(
-						() =>Logger(hwnd, sender, messageContent),
-						Priority
-					);
-				})
-			},
-			//{
-			//	ELogger.Delegate, (Log) ((hwnd, sender, messageContent) =>
-			//	{
-			//		OwnDispatcher.BeginInvoke(
-			//			delegate(() => {Logger(hwnd, sender, messageContent); }),
-			//			priority: priority
-			//		);
-			//	})
-			//},
-			{
-				ELogger.NoOpp, (Log) ((hwnd, sender, messageContent) => {})
-			},
-		};
+					EInvoker.InvokeAsync, (Log) ((hwnd, sender, messageContent) =>
+					{
+						dispatcher.InvokeAsync(
+							() => logger(hwnd, sender, messageContent),
+							Priority
+							);
+					})
+				},
+				//{
+				//	EInvoker.Delegate, (Log) ((hwnd, sender, messageContent) =>
+				//	{
+				//		_dispatcher.BeginInvoke(
+				//			delegate(() => {_logger(hwnd, sender, messageContent); }),
+				//			priority: priority
+				//		);
+				//	})
+				//},
+				{
+					EInvoker.NoOpp, (Log) ((hwnd, sender, messageContent) => { })
+				}
+			};
+
+		}
 	}
 
 	public static class Messages
@@ -410,7 +425,8 @@ namespace vba_debug_client
 			VBA_PRINT = 0x401,
 			VBA_EOF = 0x402,
 			VBA_LOGGING = 0x403,
-			VBA_CLEAR = 0x404
+			VBA_CLEAR = 0x404,
+			VBA_TRANSPORT = 0x405
 		}
 
 		/// <summary>
