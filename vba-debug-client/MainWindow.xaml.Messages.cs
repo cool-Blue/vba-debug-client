@@ -38,150 +38,15 @@ namespace vba_debug_client
 
 	}
 
-	public class TestTypeOf
+	public static class Win32
 	{
-		public struct Teststruct
-		{
-			public int d1;
-			public int d2;
-		}
-		Teststruct cds;
-
-		public Teststruct ToString (IntPtr lParam)
-		{
-			var t = typeof(Teststruct);	// todo cannot resolve symbol 'cds'
-			cds.d1 = 1;
-			cds.d2 = 2;
-			return cds;
-		}
-
-		public TestTypeOf ()
-		{
-			cds = new Teststruct();
-		}
-
-	}
-
-	public enum EInvoker : uint
-	{
-		NewAction,
-		CastAction,
-		NewLog,
-		InstanceLog,
-		CastLog,
-		InvokeAsync,
-		Delegate,
-		NoOpp
-	}
-
-	/// <summary>
-	/// Provides a mapping between VBA_PRINT message wParam and logger invokation methods
-	/// </summary>
-	public class LogInvokers
-	{
-		public delegate void Log (IntPtr hwnd, IntPtr sender, string p);
-
-		private const DispatcherPriority Priority = DispatcherPriority.ApplicationIdle;
-		
-		public Dictionary<EInvoker, Log> LoggerTypes;
-
-		public LogInvokers (Dispatcher dispatcher, Log logger)
-		{
-			LoggerTypes = Invokers(dispatcher, logger);
-		}
-
-		/// <summary>
-		/// An invoker manifold for Log delegates
-		/// </summary>
-		static Dictionary<EInvoker, Log> Invokers (Dispatcher dispatcher, Log logger)
-		{
-			return new Dictionary<EInvoker, Log>()
-			{
-				{
-					EInvoker.NewAction, (Log) ((hwnd, sender, messageContent) =>
-					{
-						dispatcher.BeginInvoke(
-							new Action(() => logger(hwnd, sender, messageContent)),
-							Priority
-							);
-					})
-				},
-				{
-					EInvoker.CastAction, (Log) ((hwnd, sender, messageContent) =>
-					{
-						dispatcher.BeginInvoke(
-							method: (Action) (() => logger(hwnd, sender, messageContent)),
-							priority: Priority
-							);
-					})
-				},
-				{
-					EInvoker.NewLog, (Log) ((hwnd, sender, messageContent) =>
-					{
-						//requires
-						//	private delegate void Log(IntPtr hwnd, string string sender, string p);
-						//in owner class
-						dispatcher.BeginInvoke(
-							new Log(logger),
-							args: new object[] {hwnd, sender, messageContent},
-							priority: Priority
-							);
-					})
-				},
-				{
-					EInvoker.InstanceLog, (Log) ((hwnd, sender, messageContent) =>
-					{
-						//requires
-						//	private readonly Log _pLog;	// in owner class
-						//and in owner class constructor	
-						//	instance = this;
-						//	_pLog = new Log(_logger);
-						dispatcher.BeginInvoke(
-							logger, args: new object[] {hwnd, sender, messageContent},
-							priority: Priority
-							);
-					})
-				},
-				{
-					EInvoker.CastLog, (Log) ((hwnd, sender, messageContent) =>
-					{
-						//requires
-						//	private delegate void Log(IntPtr hwnd, string string sender, string p);
-						//in owner class
-						dispatcher.BeginInvoke(
-							(Log) (logger), args: new object[] {hwnd, sender, messageContent},
-							priority: Priority
-							);
-					})
-				},
-				{
-					EInvoker.InvokeAsync, (Log) ((hwnd, sender, messageContent) =>
-					{
-						dispatcher.InvokeAsync(
-							() => logger(hwnd, sender, messageContent),
-							Priority
-							);
-					})
-				},
-				//{
-				//	EInvoker.Delegate, (Log) ((hwnd, sender, messageContent) =>
-				//	{
-				//		_dispatcher.BeginInvoke(
-				//			delegate(() => {_logger(hwnd, sender, messageContent); }),
-				//			priority: priority
-				//		);
-				//	})
-				//},
-				{
-					EInvoker.NoOpp, (Log) ((hwnd, sender, messageContent) => { })
-				}
-			};
-
-		}
+		[DllImport("user32.dll")]
+		public static extern bool SetForegroundWindow (IntPtr hWnd);
 	}
 
 	public static class Messages
 	{
+
 		/// <summary>
 		/// From http://wiki.winehq.org/List_Of_Windows_Messages
 		/// </summary>
@@ -422,7 +287,7 @@ namespace vba_debug_client
 			WM_PENEVENT = 0x0388,
 			WM_PENWINLAST = 0x038f,
 			DDM_SETFMT = 0x0400,
-			VBA_PRINT = 0x401,
+			VBA_REQ_FOREGROUND = 0x401,
 			VBA_EOF = 0x402,
 			VBA_LOGGING = 0x403,
 			VBA_CLEAR = 0x404,
@@ -704,7 +569,7 @@ namespace vba_debug_client
 			{ WindowMessage.WM_PENEVENT, "WM_PENEVENT" },
 			{ WindowMessage.WM_PENWINLAST, "WM_PENWINLAST" },
 			{ WindowMessage.DDM_SETFMT, "DDM_SETFMT" },
-			{ WindowMessage.VBA_PRINT, "VBA_PRINT" },
+			{ WindowMessage.VBA_REQ_FOREGROUND, "VBA_REQ_FOREGROUND" },
 		};
 	}
 }

@@ -15,6 +15,7 @@ using System.Windows.Shapes;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
+using Newtonsoft.Json;
 
 
 namespace vba_debug_client
@@ -28,35 +29,30 @@ namespace vba_debug_client
 
 		public static MainWindow Instance;
 
-		private readonly LogInvokers _logInvokers;
-
-		private EInvoker _invokerType;
-
 		private string _loggerTransport;
 
 		private readonly Logger _logger;
+
+		private readonly SetFocus _setFocus;
 
 		public MainWindow()
 		{
 			InitializeComponent();
 			Title = "VBA Debug Log";
+			this.ShowActivated = true;
 			Instance = this;
 			_logger = new Logger(logBox);
-			_logInvokers = new LogInvokers(Dispatcher, _logger.Loggers["text"]);	// bind the dictionary to the inst context
-			_invokerType = EInvoker.CastAction;
+			_loggerTransport = "text";
 			_logging = true;
+			_setFocus = new SetFocus(toExcel);
 		}
 
-		public void LogTest(IntPtr hwnd, string code, string p2)
-		{
-			var msg = logBox.Text + _hwndSource.Handle.ToString("X") + "\t" + hwnd.ToString("X") + "\t" + code + "\t" + p2 + "\n";
-			logBox.Text = msg;
-			logBox.ScrollToEnd();
-		}
 		private Boolean _logging;
 		private class Logger
 		{
 			// todo move Log delegate declaration here
+
+			internal delegate void Log (IntPtr hwnd, IntPtr sender, string p);
 
 			private readonly TextBox _logBox;
 
@@ -66,59 +62,116 @@ namespace vba_debug_client
 				_logBox.Text = "";
 			}
 
-			public Dictionary<string, LogInvokers.Log> Loggers;
+			public readonly Dictionary<string, Log> Loggers;
 
 			private readonly StringBuilder _content = new StringBuilder();
 			private int _newLines;
 			private const int PAGE = 100;
 
+			public void LogTest (IntPtr hwnd, int msg, string message, IntPtr wParam, IntPtr lParam)
+			{
+				var l = hwnd.ToString("X") + "\t" + msg.ToString("X4") +": " + message + "\t" + wParam.ToString("X") + "\t" + lParam.ToString("X") + "\n";
+				if (message != null)
+				{
+					_content.AppendLine(l);
+					testLogging = true;
+				}
+				if (message != null && PAGE > ++_newLines) return;
+				_logBox.Text = _content.ToString();
+				_logBox.ScrollToEnd();
+				_newLines = 0;
+				testLogging = false;
+
+			}
+
+			public Boolean testLogging { get; private set; }
+
+			public void TestLogFlush ()
+			{
+				LogTest(IntPtr.Zero, 0, null, IntPtr.Zero, IntPtr.Zero);
+
+			}
+
 			public Logger (TextBox logBox)
 			{
 				_logBox = logBox;
-				Loggers = new Dictionary<string, LogInvokers.Log>
+				var state = new LoggerState();
+
+				Loggers = new Dictionary<string, Log>
 				{
 					{
-						"text", (IntPtr hwnd, IntPtr sender, string p2) =>
-						{
-							if (p2 != null)
-								_content.AppendLine(p2);
-							if (p2 != null && PAGE > ++_newLines) return;
-							_logBox.Text = _content.ToString();
-							_logBox.ScrollToEnd();
-							_newLines = 0;
-						}
+						"text", 
+						(IntPtr hwnd, IntPtr sender, string p2) =>
+							_output(p2)
 					},
 					{
-						"json", (IntPtr hwnd, IntPtr sender, string p2) =>
-						{
-							if (p2 != null)
-								_content.AppendLine(p2);
-							if (p2 != null && PAGE > ++_newLines) return;
-							_logBox.Text = _content.ToString();
-							_logBox.ScrollToEnd();
-							_newLines = 0;
-						}
+						"json", 
+						(IntPtr hwnd, IntPtr sender, string p2) => 
+							_output(state.ToString(p2))
 					}
 				};
 			}
 
-			public enum logEdge : uint
+			void _output(string l)
 			{
-				callProc,
-				logReport,
-				ExitProc
+				if (l != null)
+					_content.AppendLine(l);
+				if (l != null && PAGE > ++_newLines) return;
+				_logBox.Text = _content.ToString();
+				_logBox.ScrollToEnd();
+				_newLines = 0;
 			}
 
-			private class LoggerMessage
+			private class LoggerState
 			{
-				public logEdge edge { get; set; }
-				public string caller { get; set; }
-				public string timestamp { get; set; }
-				public string context { get; set; }
-				public string message { get; set; }
-				public string error { get; set; }
-				public string dt { get; set; }
+				
+				public enum logEdge : uint
+				{
+					callProc,
+					logReport,
+					ExitProc
+				}
+
+				public class LoggerMessage
+				{
+					public int callDepth { get; set; }
+					public logEdge edge { get; set; }
+					public string caller { get; set; }
+					public string timestamp { get; set; }
+					public string context { get; set; }
+					public string message { get; set; }
+					public string error { get; set; }
+					public string dt { get; set; }
+				}
+
+				private const int tsLen = 12;
+				private LoggerMessage _msg;
+				private string _caller;
+
+				public string ToString(string json)
+				{
+					var output = "";
+					try
+					{
+
+						_msg = JsonConvert.DeserializeObject<LoggerState.LoggerMessage>(json);
+						output = String.Format("{0,-" + (tsLen + _msg.callDepth*2) + "}", _msg.timestamp);
+						output += String.Format("{0," + (_msg.caller.Length + 1) + "}:", _msg.edge == logEdge.callProc ? _msg.caller : "");
+
+					}
+					catch
+					{
+						output = String.Format("ERROR: Invalid Json\n\t{0}", json);
+					}
+					return output;
+
+				}
+
+				public LoggerState()
+				{
+				}
 			}
+
 		}
 
 		private void pause_Click(object sender, RoutedEventArgs e)
@@ -134,7 +187,6 @@ namespace vba_debug_client
 		}
 		private void clear_Click (object sender, RoutedEventArgs e)
 		{
-			summary.Text = "";
 			_logger.Clear();
 		}
 
@@ -150,6 +202,10 @@ namespace vba_debug_client
 			_hwndSource = PresentationSource.FromVisual(this) as HwndSource;
 			if (_hwndSource == null) return;
 			_hwndSource.AddHook(WndProc);
+			//this.Activate();
+			//this.Show();
+			//this.Focus();
+
 		}
 
 		private static readonly WmCopyData wmCopyData = new WmCopyData();
@@ -166,8 +222,14 @@ namespace vba_debug_client
 		private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
 			// todo try single argument overload
 		{
+			handled = true;
 			switch ((Messages.WindowMessage)msg)
 			{
+				case Messages.WindowMessage.VBA_REQ_FOREGROUND:
+					Win32.SetForegroundWindow(wParam);
+					Instance._setFocus.HWnd = wParam;
+					break;
+
 				case Messages.WindowMessage.WM_COPYDATA:
 					if (!Instance._logging) return IntPtr.Zero;
 
@@ -184,7 +246,7 @@ namespace vba_debug_client
 						var messageContent = wmCopyData.ToString(lParam);
 						var sender = wParam;
 
-						Instance._logInvokers.LoggerTypes[Instance._invokerType](hwnd, sender, messageContent);
+						Instance._logger.Loggers[Instance._loggerTransport](hwnd, sender, messageContent);
 					}
 					catch
 					{
@@ -197,11 +259,9 @@ namespace vba_debug_client
 				case Messages.WindowMessage.VBA_LOGGING:
 					// pause or un-pause logging
 					Instance.pause_Click(Instance.pause, new RoutedEventArgs(Button.ClickEvent));
-					break;
+					if (Instance._logger.testLogging)
+						Instance._logger.TestLogFlush();
 
-				case Messages.WindowMessage.VBA_PRINT:
-					// select the delegate to be used for logging
-					Instance._invokerType = (EInvoker)wParam.ToInt32();
 					break;
 
 				case Messages.WindowMessage.VBA_CLEAR:
@@ -212,15 +272,58 @@ namespace vba_debug_client
 					// select text or json transport mode
 					// todo add selector in excel
 					// todo move to subclass of WM_COPYDATA
-					Instance._loggerTransport = Instance._logger.Loggers.Keys.ToList()[wParam.ToInt32()];
+					Instance._loggerTransport = Instance._logger.Loggers.Keys.ToList()[(int)wParam];
+
+					Instance._setFocus.HWnd = lParam;
+
+					if (Instance._logger.testLogging)
+						Instance._logger.TestLogFlush();
+
 					break;
 
 				default:
+					handled = false;
+					try
+					{
+
+						if (!Instance._logging) return IntPtr.Zero;
+
+						var message = Messages.names.ContainsKey((Messages.WindowMessage) msg)
+							? Messages.names[(Messages.WindowMessage) msg]
+							: "UNKNOWN MESSAGE";
+
+						Instance._logger.LogTest(hwnd, msg, message, wParam, lParam);
+
+					}
+					catch
+					{
+						// it really doesn't matter
+					}
 					return IntPtr.Zero;
+
 			}
 			
 			return IntPtr.Zero;
 
+		}
+
+		private class SetFocus
+		{
+			public SetFocus(Button b)
+			{
+				_b = b;
+				_b.Click += toExcel_click;
+			}
+
+			private Button _b;
+
+			public IntPtr HWnd { set; private get; }
+
+			private void toExcel_click (object sender, RoutedEventArgs e)
+			{
+				Win32.SetForegroundWindow(HWnd);
+				Console.WriteLine(HWnd.ToString("X"));
+			}
 		}
 	}
 }
@@ -236,8 +339,6 @@ namespace vba_debug_client
 		public Boolean Enabled { get; set; }
 
 		public static MessageOnlyWindow Instance;
-
-		private EInvoker _invoker;
 
 		public MessageOnlyWindow (Dispatcher output, Delegate log)
 		{
