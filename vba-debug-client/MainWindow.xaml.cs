@@ -14,6 +14,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using Newtonsoft.Json;
 
@@ -35,6 +36,10 @@ namespace vba_debug_client
 
 		private readonly SetFocus _setFocus;
 
+		private readonly ToggleButton _logAll;
+
+		private readonly ToggleButton _logging;
+
 		public MainWindow()
 		{
 			InitializeComponent();
@@ -43,11 +48,11 @@ namespace vba_debug_client
 			Instance = this;
 			_logger = new Logger(logBox);
 			_loggerTransport = "text";
-			_logging = true;
 			_setFocus = new SetFocus(toExcel);
+			_logging = new ToggleButton(pause, new List<string> { "Logging", "Paused" });
+			_logAll = new ToggleButton(logAll, new List<string> { "Log All", "Log VBA" }, false);
 		}
 
-		private Boolean _logging;
 		private class Logger
 		{
 			// todo move Log delegate declaration here
@@ -70,7 +75,7 @@ namespace vba_debug_client
 
 			public void LogTest (IntPtr hwnd, int msg, string message, IntPtr wParam, IntPtr lParam)
 			{
-				var l = hwnd.ToString("X") + "\t" + msg.ToString("X4") +": " + message + "\t" + wParam.ToString("X") + "\t" + lParam.ToString("X") + "\n";
+				var l = hwnd.ToString("X") + "\t" + msg.ToString("X4") +": " + message + "\t" + wParam.ToString("X") + "\t" + lParam.ToString("X");
 				if (message != null)
 				{
 					_content.AppendLine(l);
@@ -101,13 +106,11 @@ namespace vba_debug_client
 				{
 					{
 						"text", 
-						(IntPtr hwnd, IntPtr sender, string p2) =>
-							_output(p2)
+						(IntPtr hwnd, IntPtr sender, string p2) => _output(p2)
 					},
 					{
 						"json", 
-						(IntPtr hwnd, IntPtr sender, string p2) => 
-							_output(state.ToString(p2))
+						(IntPtr hwnd, IntPtr sender, string p2) => _output(state.ToString(p2))
 					}
 				};
 			}
@@ -150,13 +153,17 @@ namespace vba_debug_client
 
 				public string ToString(string json)
 				{
+					if (json == null)
+						return null;
+
 					var output = "";
 					try
 					{
 
 						_msg = JsonConvert.DeserializeObject<LoggerState.LoggerMessage>(json);
-						output = String.Format("{0,-" + (tsLen + _msg.callDepth*2) + "}", _msg.timestamp);
-						output += String.Format("{0," + (_msg.caller.Length + 1) + "}:", _msg.edge == logEdge.callProc ? _msg.caller : "");
+						output = String.Format("{0,-" + (tsLen + _msg.callDepth) + "}", _msg.timestamp);
+						output += String.Format("{0," + (_msg.caller.Length + 1) + "}:", _msg.edge == logEdge.callProc ? _msg.caller : " ");
+						output += String.Format(" {0}", _msg.context == "" ? _msg.message : _msg.context + "  " + _msg.message);
 
 					}
 					catch
@@ -174,17 +181,28 @@ namespace vba_debug_client
 
 		}
 
-		private void pause_Click(object sender, RoutedEventArgs e)
+		private class ToggleButton
 		{
-			string content;
-			Toggle(ref _logging, out content, new List<string> {"Logging", "Paused"});
-			pause.Content = content;
+			readonly Button _b;
+			private readonly List<string> _options;
+			public Boolean On { get; private set; }
+
+			public ToggleButton(Button b, List<string> options, Boolean on = true)
+			{
+				_b = b;
+				_options = options;
+				_b.Click += Click;
+				On = on;
+			}
+
+			public void Click (object sender, RoutedEventArgs e)
+			{
+				On = !On;
+				_b.Content = On ? _options[0] : _options[1]; ;
+			}
+
 		}
-		private static void Toggle (ref Boolean flag, out string value, IReadOnlyList<string> options)
-		{
-			flag = !flag;
-			value = flag ? options[0] : options[1];
-		}
+
 		private void clear_Click (object sender, RoutedEventArgs e)
 		{
 			_logger.Clear();
@@ -231,7 +249,7 @@ namespace vba_debug_client
 					break;
 
 				case Messages.WindowMessage.WM_COPYDATA:
-					if (!Instance._logging) return IntPtr.Zero;
+					if (!Instance._logging.On) return IntPtr.Zero;
 
 					// wParam is the hwnd of the sender
 					// lParam is a pointer to a COPYDATASTRUCT struct that packages the message data
@@ -258,14 +276,14 @@ namespace vba_debug_client
 
 				case Messages.WindowMessage.VBA_LOGGING:
 					// pause or un-pause logging
-					Instance.pause_Click(Instance.pause, new RoutedEventArgs(Button.ClickEvent));
+					Instance._logging.Click(Instance.pause, new RoutedEventArgs(ButtonBase.ClickEvent));
 					if (Instance._logger.testLogging)
 						Instance._logger.TestLogFlush();
 
 					break;
 
 				case Messages.WindowMessage.VBA_CLEAR:
-					Instance.clear_Click(Instance.clear, new RoutedEventArgs(Button.ClickEvent));
+					Instance.clear_Click(Instance.clear, new RoutedEventArgs(ButtonBase.ClickEvent));
 					break;
 
 				case Messages.WindowMessage.VBA_TRANSPORT:
@@ -273,8 +291,6 @@ namespace vba_debug_client
 					// todo add selector in excel
 					// todo move to subclass of WM_COPYDATA
 					Instance._loggerTransport = Instance._logger.Loggers.Keys.ToList()[(int)wParam];
-
-					Instance._setFocus.HWnd = lParam;
 
 					if (Instance._logger.testLogging)
 						Instance._logger.TestLogFlush();
@@ -286,7 +302,7 @@ namespace vba_debug_client
 					try
 					{
 
-						if (!Instance._logging) return IntPtr.Zero;
+						if (!Instance._logAll.On) return IntPtr.Zero;
 
 						var message = Messages.names.ContainsKey((Messages.WindowMessage) msg)
 							? Messages.names[(Messages.WindowMessage) msg]
@@ -325,6 +341,7 @@ namespace vba_debug_client
 				Console.WriteLine(HWnd.ToString("X"));
 			}
 		}
+
 	}
 }
 
