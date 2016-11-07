@@ -291,7 +291,8 @@ namespace vba_debug_client
 			VBA_EOF = 0x402,
 			VBA_LOGGING = 0x403,
 			VBA_CLEAR = 0x404,
-			VBA_TRANSPORT = 0x405
+			VBA_TRANSPORT = 0x405,
+			VBA_DEFAULT = 0x406
 		}
 
 		/// <summary>
