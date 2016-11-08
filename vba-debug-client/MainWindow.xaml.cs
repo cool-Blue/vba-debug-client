@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -28,15 +30,13 @@ namespace vba_debug_client
 	{
 		public static MainWindow Instance;
 
+		private readonly Vm _vm;
+
 		private string _loggerTransport;
 
 		private readonly Logger _logger;
 
 		private readonly SetFocus _setFocus;
-
-		private readonly ToggleButton _logAll;
-
-		private readonly ToggleButton _logging;
 
 		public MainWindow()
 		{
@@ -47,10 +47,71 @@ namespace vba_debug_client
 			_logger = new Logger(logBox);
 			_loggerTransport = "text";
 			_setFocus = new SetFocus(toExcel);
-			_logging = new ToggleButton(pause, new List<string> {"Logging", "Paused"});
-			_logAll = new ToggleButton(logAll, new List<string> {"Log All", "Log VBA"}, false);
+			DataContext = _vm = new Vm
+			{
+				Pause = new Vm.ObservableToggleButton(pause, new List<string> { "Logging", "Paused" }),
+				LogAll = new Vm.ObservableToggleButton(logAll, new List<string> {"Log All", "Log VBA"}, false),
+			};
 		}
 
+		private class Vm
+		{
+			public abstract class ObservableObject : INotifyPropertyChanged
+			{
+				public event PropertyChangedEventHandler PropertyChanged;
+
+				protected virtual void OnPropertyChanged ([CallerMemberName] string propName = "")
+				{
+					var pc = PropertyChanged;
+					if (pc != null)
+						pc(this, new PropertyChangedEventArgs(propName));
+				}
+			}
+
+			public class ObservableToggleButton : ObservableObject
+			{
+				private readonly Button _b;
+				private readonly List<string> _options;
+
+				private string _content;
+				public string Content
+				{
+					get { return _content; }
+					set
+					{
+						if (_content == value ) return;
+						_content = value;
+						OnPropertyChanged();
+					}
+				}
+
+				public Boolean On { get; private set; }
+
+				public ObservableToggleButton (Button b, List<string> options, Boolean on = true)
+				{
+					_b = b;
+					_options = options;
+					_b.Click += Click;
+					On = on;
+					Content = On ? _options[0] : _options[1];
+				}
+
+				public void Click (object sender, RoutedEventArgs e)
+				{
+					On = !On;
+					Content = On ? _options[0] : _options[1];
+				}
+
+			}
+
+			public ObservableToggleButton Pause { get; set; }
+
+			public ObservableToggleButton LogAll { get; set; }
+
+			public Vm ()
+			{
+			}
+		}
 		private class Logger
 		{
 			// todo move Log delegate declaration here
@@ -195,29 +256,6 @@ namespace vba_debug_client
 
 		}
 
-		private class ToggleButton
-		{
-			private readonly Button _b;
-			private readonly List<string> _options;
-			public Boolean On { get; private set; }
-
-			public ToggleButton(Button b, List<string> options, Boolean on = true)
-			{
-				_b = b;
-				_options = options;
-				_b.Click += Click;
-				On = on;
-			}
-
-			public void Click(object sender, RoutedEventArgs e)
-			{
-				On = !On;
-				_b.Content = On ? _options[0] : _options[1];
-				;
-			}
-
-		}
-
 		private void clear_Click(object sender, RoutedEventArgs e)
 		{
 			_logger.Clear();
@@ -277,7 +315,7 @@ namespace vba_debug_client
 					Messages.WindowMessage.WM_COPYDATA,
 					(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
 					{
-						if (!Instance._logging.On) return IntPtr.Zero;
+						if (!Instance._vm.Pause.On) return IntPtr.Zero;
 
 						// wParam is the hwnd of the sender
 						// lParam is a pointer to a COPYDATASTRUCT struct that packages the message data
@@ -306,7 +344,7 @@ namespace vba_debug_client
 					(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
 					{
 						// pause or un-pause logging
-						Instance._logging.Click(Instance.pause, new RoutedEventArgs(ButtonBase.ClickEvent));
+						Instance._vm.Pause.Click(Instance.pause, new RoutedEventArgs(ButtonBase.ClickEvent));
 						if (Instance._logger.testLogging)
 							Instance._logger.TestLogFlush();
 						return IntPtr.Zero;
@@ -342,7 +380,7 @@ namespace vba_debug_client
 						try
 						{
 
-							if (!Instance._logAll.On) return IntPtr.Zero;
+							if (!Instance._vm.LogAll.On) return IntPtr.Zero;
 
 							var message = Messages.names.ContainsKey((Messages.WindowMessage) msg)
 								? Messages.names[(Messages.WindowMessage) msg]

@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Height="807" Width="764" Margin="10" Cursor="Arrow" Icon="favicon 256.ico" Title="VBA Debug Client" WindowStartupLocation="CenterOwner" Padding="10,0,0,0" UseLayoutRounding="True">
     <Grid Margin="0,0,2,0">
-        <Button x:Name="pause" Content="Logging" HorizontalAlignment="Center" Margin="320,735,359,0" VerticalAlignment="Top" Width="75"/>
         <TextBox x:Name="logBox" TextWrapping="NoWrap" VerticalAlignment="Top" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,0,-6,0" FontFamily="Consolas" Cursor="Arrow" BorderThickness="3,3,3,0" Height="690">
             <TextBox.SelectionBrush>
                 <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
@@ -18,8 +17,9 @@
                 </LinearGradientBrush>
             </TextBox.Background>
         </TextBox>
+        <Button x:Name="pause" Content="{Binding Pause.Content}" HorizontalAlignment="Center" Margin="320,735,359,0" VerticalAlignment="Top" Width="75"/>
         <Button x:Name="clear" Content="Clear" HorizontalAlignment="Center" Margin="320,710,359,0" VerticalAlignment="Top" Width="75" Click="clear_Click"/>
         <Button x:Name="toExcel" Content="to excel" HorizontalAlignment="Left" Margin="400,710,0,0" VerticalAlignment="Top" Width="75"/>
-        <Button x:Name="logAll" Content="Log VBA" HorizontalAlignment="Left" Margin="400,735,0,0" VerticalAlignment="Top" Width="75" ClickMode="Press"/>
+        <Button x:Name="logAll" Content="{Binding LogAll.Content}" HorizontalAlignment="Left" Margin="400,735,0,0" VerticalAlignment="Top" Width="75" ClickMode="Press"/>
     </Grid>
 </Window>
