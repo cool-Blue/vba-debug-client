@@ -4,22 +4,13 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using System.Windows.Interop;
-using System.Runtime.InteropServices;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls.Primitives;
-using System.Windows.Threading;
 using Newtonsoft.Json;
-
 
 namespace vba_debug_client
 {
@@ -49,7 +40,7 @@ namespace vba_debug_client
 			_setFocus = new SetFocus(toExcel);
 			DataContext = _vm = new Vm
 			{
-				Pause = new Vm.ObservableToggleButton(pause, new List<string> { "Logging", "Paused" }),
+				Pause = new Vm.ObservableToggleButton(pause, new List<string> { "Paused", "Logging" }, false),
 				LogAll = new Vm.ObservableToggleButton(logAll, new List<string> {"Log All", "Log VBA"}, false),
 			};
 		}
@@ -70,7 +61,7 @@ namespace vba_debug_client
 
 			public class ObservableToggleButton : ObservableObject
 			{
-				private readonly Button _b;
+				private readonly ToggleButton _b;
 				private readonly List<string> _options;
 
 				private string _content;
@@ -85,32 +76,38 @@ namespace vba_debug_client
 					}
 				}
 
-				public Boolean On { get; private set; }
+				private Boolean _on ;
+				public Boolean On
+				{
+					get { return _on; }
+					set
+					{
+						if (_on == value) return;
+						_on = value;
+						Content = value ? _options[0] : _options[1];
+					}
+				}
 
-				public ObservableToggleButton (Button b, List<string> options, Boolean on = true)
+				public ObservableToggleButton (ToggleButton b, List<string> options, Boolean on = true)
 				{
 					_b = b;
 					_options = options;
-					_b.Click += Click;
-					On = on;
-					Content = On ? _options[0] : _options[1];
+					_b.IsChecked = On = on;
+					Content = _b.IsChecked ?? false ? _options[0] : _options[1];
 				}
 
-				public void Click (object sender, RoutedEventArgs e)
+				public void Push ()
 				{
-					On = !On;
-					Content = On ? _options[0] : _options[1];
+					var peer = new ToggleButtonAutomationPeer(_b);
+					var toggleProvider = peer.GetPattern(PatternInterface.Toggle) as IToggleProvider;
+					if (toggleProvider != null) toggleProvider.Toggle();
 				}
-
 			}
 
 			public ObservableToggleButton Pause { get; set; }
 
 			public ObservableToggleButton LogAll { get; set; }
 
-			public Vm ()
-			{
-			}
 		}
 		private class Logger
 		{
@@ -344,7 +341,7 @@ namespace vba_debug_client
 					(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
 					{
 						// pause or un-pause logging
-						Instance._vm.Pause.Click(Instance.pause, new RoutedEventArgs(ButtonBase.ClickEvent));
+						Instance._vm.Pause.Push();
 						if (Instance._logger.testLogging)
 							Instance._logger.TestLogFlush();
 						return IntPtr.Zero;

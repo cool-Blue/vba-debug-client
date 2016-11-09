@@ -17,9 +17,9 @@
                 </LinearGradientBrush>
             </TextBox.Background>
         </TextBox>
-        <Button x:Name="pause" Content="{Binding Pause.Content}" HorizontalAlignment="Center" Margin="320,735,359,0" VerticalAlignment="Top" Width="75"/>
+        <ToggleButton x:Name="pause" IsChecked="{Binding Pause.On, Mode=OneWayToSource}" Content="{Binding Pause.Content}" HorizontalAlignment="Center" Margin="320,735,359,0" VerticalAlignment="Top" Width="75"/>
         <Button x:Name="clear" Content="Clear" HorizontalAlignment="Center" Margin="320,710,359,0" VerticalAlignment="Top" Width="75" Click="clear_Click"/>
         <Button x:Name="toExcel" Content="to excel" HorizontalAlignment="Left" Margin="400,710,0,0" VerticalAlignment="Top" Width="75"/>
-        <Button x:Name="logAll" Content="{Binding LogAll.Content}" HorizontalAlignment="Left" Margin="400,735,0,0" VerticalAlignment="Top" Width="75" ClickMode="Press"/>
+        <ToggleButton x:Name="logAll" IsChecked="{Binding LogAll.On, Mode=OneWayToSource}" Content="{Binding LogAll.Content}" HorizontalAlignment="Left" Margin="400,735,0,0" VerticalAlignment="Top" Width="75" ClickMode="Press"/>
     </Grid>
 </Window>
